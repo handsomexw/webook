@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/ecodeclub/ekit"
 	"github.com/ecodeclub/ekit/slice"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	sms "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms/v20210111"
 )
 
@@ -31,7 +30,6 @@ func (s *Service) Send(ctx context.Context, tplId string, args []string, numbers
 	req.TemplateParamSet = s.toStringPtrSlice(args)
 	req.PhoneNumberSet = s.toStringPtrSlice(numbers)
 	resp, err := s.client.SendSms(req)
-	sms.NewClient(common.NewCredential())
 	if err != nil {
 		return err
 	}
