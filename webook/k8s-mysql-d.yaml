@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webook-mysql
+  labels:
+    app: webook-mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webook-mysql
+  template:
+    metadata:
+      name: webook-mysql
+      labels:
+        app: webook-mysql
+    spec:
+      containers:
+        - name: webook-mysql
+          image: mysql:8.0.35
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: root
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            #对应到mysql的存储为 /var/lib/mysql，要修改在mysql的配置文件
+            - mountPath: /var/lib/mysql
+              name: mysql-storage
+          ports:
+            - containerPort: 3306
+      restartPolicy: Always
+      volumes:
+        - name: mysql-storage
+          persistentVolumeClaim:
+            claimName: webook-mysql-live-claim
+#        - name: hp-mysql
+#          persistentVolumeClaim:
+#            claimName: hp-mysql-claim
+      
