@@ -1,6 +1,7 @@
 package tencent
 
 import (
+	mysms "basic-go/webook/internal/service/sms"
 	"context"
 	"fmt"
 	"github.com/ecodeclub/ekit"
@@ -12,6 +13,7 @@ type Service struct {
 	appId    *string
 	signName *string
 	client   *sms.Client
+	mysms.Name
 }
 
 func NewService(appId string, signName string, client *sms.Client) *Service {
@@ -19,6 +21,7 @@ func NewService(appId string, signName string, client *sms.Client) *Service {
 		appId:    ekit.ToPtr[string](appId),
 		signName: ekit.ToPtr[string](signName),
 		client:   client,
+		//os.Getenv(),
 	}
 }
 
@@ -39,7 +42,6 @@ func (s *Service) Send(ctx context.Context, tplId string, args []string, numbers
 		}
 	}
 	return nil
-
 }
 
 func (s *Service) toStringPtrSlice(args []string) []*string {

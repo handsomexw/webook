@@ -7,3 +7,15 @@ import "context"
 type Service interface {
 	Send(ctx context.Context, tplId string, args []string, numbers ...string) error
 }
+type Name struct {
+}
+
+// 更适配版本
+type ServiceV1 interface {
+	Send(ctx context.Context, tplId string, args []NameValue, numbers ...string) error
+}
+
+type NameValue struct {
+	Val  string
+	Name string
+}
