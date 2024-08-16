@@ -13,9 +13,12 @@ import (
 	"time"
 )
 
+var _ handler = (*UserHandler)(nil)
+
 type UserHandler struct {
 	svc         *service.UserService
 	emailRegexp *regexp.Regexp
+	codeService *service.CodeService
 }
 
 type UserClaims struct {
@@ -28,12 +31,15 @@ const (
 	emailRegexPattern = `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
 )
 
-func NewUserHandler(svc *service.UserService) *UserHandler {
+func NewUserHandler(svc *service.UserService, codeService *service.CodeService) *UserHandler {
 	return &UserHandler{
 		emailRegexp: regexp.MustCompile(emailRegexPattern, regexp.RegexOptions(regexp.Unicode)),
 		svc:         svc,
+		codeService: codeService,
 	}
 }
+
+func (u *UserHandler) RegisterRoutes(engine *gin.Engine) {}
 
 func (u *UserHandler) SignUp(ctx *gin.Context) {
 	type SignUpReq struct {
@@ -177,11 +183,24 @@ func (u *UserHandler) LoginJwt(ctx *gin.Context) {
 	//token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 	//	"userId": user.Id,
 	//})
+	err = u.setJwtToken(ctx, user.Id)
+	if err != nil {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "登录失败",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "登录成功",
+	})
+}
+
+func (u *UserHandler) setJwtToken(ctx *gin.Context, uid int64) error {
 	myclaims := UserClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 30)),
 		},
-		UserId:    123,
+		UserId:    uid,
 		UserAgent: ctx.Request.UserAgent(),
 	}
 
@@ -190,19 +209,14 @@ func (u *UserHandler) LoginJwt(ctx *gin.Context) {
 	//token := jwt.New(jwt.SigningMethodHS512)
 	tokenStr, err := token.SignedString([]byte("oN1)tV1{xA6#xM2/nR5/hU1#fH2$bU0$"))
 	if err != nil {
-		ctx.JSON(http.StatusOK, gin.H{
-			"message": "jwt系统错误",
-			"error":   err.Error(),
-		})
+		//ctx.JSON(http.StatusOK, gin.H{
+		//	"message": "jwt系统错误",
+		//	"error":   err.Error(),
+		//})
+		return err
 	}
 	ctx.Header("Token", tokenStr)
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "登录成功",
-		"token":   tokenStr,
-	})
-	//fmt.Println(tokenStr)
-	fmt.Println(user.Id)
-
+	return nil
 }
 
 func (u *UserHandler) Profile(ctx *gin.Context) {
@@ -221,4 +235,88 @@ func (u *UserHandler) Profile(ctx *gin.Context) {
 		return
 	}
 	println(claims.UserId)
+}
+
+func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
+	type Request struct {
+		Phone string `json:"phone"`
+	}
+	const biz = "login"
+	var req Request
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "验证码校验系统错误",
+		})
+		return
+	}
+	err := u.codeService.Send(ctx, biz, req.Phone)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 5,
+			Msg:  "验证码发送错误",
+			Data: err.Error(),
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "发送成功",
+	})
+
+}
+func (u *UserHandler) VerifyLoginSMSCode(ctx *gin.Context) {
+	type Request struct {
+		Phone string `json:"phone"`
+		Code  string `json:"code"`
+	}
+	const biz = "login"
+	var req Request
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "验证码校验系统错误",
+		})
+		fmt.Println("这是绑定阶段")
+		return
+	}
+	if req.Phone == "" {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "手机号格式错误",
+		})
+		return
+	}
+	ok, err := u.codeService.Verify(ctx, biz, req.Phone, req.Code)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 2,
+			Msg:  "验证码校验系统错误",
+		})
+		return
+	}
+	if !ok {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "验证码错误",
+		})
+		return
+	}
+	//id 如何获取
+	user, err := u.svc.FindOrCreate(ctx, req.Phone)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 2,
+			Msg:  "创建用户错误",
+			Data: err.Error(),
+		})
+	}
+	err = u.setJwtToken(ctx, user.Id)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 2,
+			Msg:  "创建用户错误",
+			Data: err.Error(),
+		})
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Code: 0,
+		Msg:  "验证码校验通过",
+		Data: "",
+	})
 }

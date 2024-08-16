@@ -58,5 +58,5 @@ func (c *CodeCache) Verify(ctx context.Context, biz string, phone string, expect
 }
 
 func (c *CodeCache) key(biz, phone string) string {
-	return fmt.Sprint("phone_code:%s:%s", biz, phone)
+	return fmt.Sprintf("phone_code:%s:%s", biz, phone)
 }

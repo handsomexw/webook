@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ErrorUserDuplicate         = repository.ErrorUserDuplicateEmail
+	ErrorUserDuplicate         = repository.ErrorUserDuplicate
 	ErrorInvalidUserOrPassword = errors.New("邮箱/密码不对")
 )
 
@@ -54,4 +54,22 @@ func (svc *UserService) Profile(ctx context.Context, id int64) (domain.User, err
 	user, err := svc.repo.FindById(ctx, id)
 
 	return user, err
+}
+
+func (svc *UserService) FindOrCreate(ctx context.Context, phone string) (domain.User, error) {
+	//这是快路径
+	u, err := svc.repo.FindByPhone(ctx, phone)
+	if err != repository.ErrorUserNotFound {
+		return u, err
+	}
+	//这是慢路径
+	err = svc.repo.Create(ctx, domain.User{
+		Phone: phone,
+	})
+	if err != nil && err != ErrorUserDuplicate {
+		return u, err
+	}
+	//未找到就创建一个后再找一遍就找到了
+	//存在主从延迟
+	return svc.repo.FindByPhone(ctx, phone)
 }

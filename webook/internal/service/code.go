@@ -8,11 +8,15 @@ import (
 	"math/rand"
 )
 
-var codeTplId string = "1122334"
+var codeTplId string = "2239216"
 
 type CodeService struct {
 	repo   *repository.CodeRepository
 	smsSvc sms.Service
+}
+
+func NewCodeService(repo *repository.CodeRepository, smsSvc sms.Service) *CodeService {
+	return &CodeService{repo: repo, smsSvc: smsSvc}
 }
 
 func (c *CodeService) Send(ctx context.Context, biz string, phone string) error {
@@ -24,7 +28,7 @@ func (c *CodeService) Send(ctx context.Context, biz string, phone string) error 
 	if err != nil {
 		return err
 	}
-	return c.smsSvc.Send(ctx, codeTplId, []string{}, phone)
+	return c.smsSvc.Send(ctx, codeTplId, []string{code}, phone)
 
 	//if err != nil {
 	//	//redis有验证码，但是发送失败，发送失败有两个原因，不确定
@@ -45,6 +49,7 @@ func (c *CodeService) generateCode() string {
 	//生成 0-999999随机数
 	num := rand.Intn(1000000)
 	return fmt.Sprintf("%06d", num)
+
 }
 
 // func (c *CodeService) VerifyV1(ctx context.Context, biz string, phone string, inputcode string) error {
