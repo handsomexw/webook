@@ -8,6 +8,7 @@ import (
 	"math/rand"
 )
 
+// 短信模版id
 var codeTplId string = "2239216"
 
 type CodeService interface {
