@@ -13,15 +13,23 @@ var (
 	ErrorInvalidUserOrPassword = errors.New("邮箱/密码不对")
 )
 
-type UserService struct {
-	repo *repository.UserRepository
+type UserService interface {
+	SignUp(ctx context.Context, u domain.User) error
+	Login(ctx context.Context, user domain.User) (domain.User, error)
+	Profile(ctx context.Context, id int64) (domain.User, error)
+	FindOrCreate(ctx context.Context, phone string) (domain.User, error)
+	UpdateNoeSensitiveInfo(ctx context.Context, user domain.User) error
 }
 
-func NewUserService(repo *repository.UserRepository) *UserService {
-	return &UserService{repo: repo}
+type OneUserService struct {
+	repo repository.UserRepository
 }
 
-func (svc *UserService) SignUp(ctx context.Context, u domain.User) error {
+func NewUserService(repo repository.UserRepository) UserService {
+	return &OneUserService{repo: repo}
+}
+
+func (svc *OneUserService) SignUp(ctx context.Context, u domain.User) error {
 	encrypted, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -31,7 +39,7 @@ func (svc *UserService) SignUp(ctx context.Context, u domain.User) error {
 	return svc.repo.Create(ctx, u)
 }
 
-func (svc *UserService) Login(ctx context.Context, user domain.User) (domain.User, error) {
+func (svc *OneUserService) Login(ctx context.Context, user domain.User) (domain.User, error) {
 	u, err := svc.repo.FindByEmail(ctx, user.Email)
 	if errors.Is(err, repository.ErrorUserNotFound) {
 		return domain.User{}, ErrorInvalidUserOrPassword
@@ -50,13 +58,11 @@ func (svc *UserService) Login(ctx context.Context, user domain.User) (domain.Use
 	//两个错误：系统错误和密码错误
 }
 
-func (svc *UserService) Profile(ctx context.Context, id int64) (domain.User, error) {
-	user, err := svc.repo.FindById(ctx, id)
-
-	return user, err
+func (svc *OneUserService) Profile(ctx context.Context, id int64) (domain.User, error) {
+	return svc.repo.FindById(ctx, id)
 }
 
-func (svc *UserService) FindOrCreate(ctx context.Context, phone string) (domain.User, error) {
+func (svc *OneUserService) FindOrCreate(ctx context.Context, phone string) (domain.User, error) {
 	//这是快路径
 	u, err := svc.repo.FindByPhone(ctx, phone)
 	if err != repository.ErrorUserNotFound {
@@ -72,4 +78,9 @@ func (svc *UserService) FindOrCreate(ctx context.Context, phone string) (domain.
 	//未找到就创建一个后再找一遍就找到了
 	//存在主从延迟
 	return svc.repo.FindByPhone(ctx, phone)
+}
+func (svc *OneUserService) UpdateNoeSensitiveInfo(ctx context.Context, user domain.User) error {
+	//需要更新，而不是修改
+	//return svc.repo.Create(ctx, user)
+	return nil
 }

@@ -16,9 +16,9 @@ import (
 var _ handler = (*UserHandler)(nil)
 
 type UserHandler struct {
-	svc         *service.UserService
+	svc         service.UserService
 	emailRegexp *regexp.Regexp
-	codeService *service.CodeService
+	codeService service.CodeService
 }
 
 type UserClaims struct {
@@ -31,7 +31,7 @@ const (
 	emailRegexPattern = `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
 )
 
-func NewUserHandler(svc *service.UserService, codeService *service.CodeService) *UserHandler {
+func NewUserHandler(svc service.UserService, codeService service.CodeService) *UserHandler {
 	return &UserHandler{
 		emailRegexp: regexp.MustCompile(emailRegexPattern, regexp.RegexOptions(regexp.Unicode)),
 		svc:         svc,
@@ -49,7 +49,7 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 	}
 
 	var req SignUpReq
-	if err := ctx.ShouldBindJSON(&req); err != nil {
+	if err := ctx.BindJSON(&req); err != nil {
 		return
 	}
 
@@ -71,10 +71,10 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(200, gin.H{
-		"message":  "注册成功",
-		"user":     req.Email,
-		"confirm":  req.ConfirmPassword,
-		"password": req.Password,
+		"message": "注册成功",
+		//"user":     req.Email,
+		//"confirm":  req.ConfirmPassword,
+		//"password": req.Password,
 	})
 	//fmt.Println(req)
 }
@@ -127,8 +127,54 @@ func (u *UserHandler) Login(ctx *gin.Context) {
 }
 
 func (u *UserHandler) Edit(ctx *gin.Context) {
+	//更新更新不敏感信息可以随便更新
+	//更新敏感信息如邮箱，手机号，需要用到验证码模块
+	type Req struct {
+		NewName  string `json:"newName"`
+		Birthday string `json:"birthday"`
+		AboutMe  string `json:"aboutMe"`
+	}
+	var req Req
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "系统错误",
+		})
+	}
+	//校验规则
+	switch len(req.NewName) {
+	case 0:
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "用户名不能为空",
+		})
+	case 1024:
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "用户名太长",
+		})
+	default:
+	}
+	birthday, err := time.Parse("2006-01-02", req.Birthday)
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 4,
+			Msg:  "日期格式不对",
+			Data: nil,
+		})
+	}
+	uc := ctx.MustGet("claims").(UserClaims)
+	err = u.svc.UpdateNoeSensitiveInfo(ctx, domain.User{
+		Id:       uc.UserId,
+		Name:     req.NewName,
+		Birthday: birthday,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 6,
+			Msg:  "系统错误",
+			Data: nil,
+		})
+	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"messgae": "这是edit",
+		"message": "修改成功",
 	})
 }
 
@@ -220,21 +266,35 @@ func (u *UserHandler) setJwtToken(ctx *gin.Context, uid int64) error {
 }
 
 func (u *UserHandler) Profile(ctx *gin.Context) {
-	c, ok := ctx.Get("claims")
-	if !ok {
-		ctx.JSON(http.StatusOK, gin.H{
-			"message": "读取claims错误",
-		})
-		return
+	//c, ok := ctx.Get("claims")
+	//if !ok {
+	//	ctx.JSON(http.StatusOK, gin.H{
+	//		"message": "读取claims错误",
+	//	})
+	//	return
+	//}
+	//claims, ok := c.(*UserClaims)
+	//if !ok {
+	//	ctx.JSON(http.StatusOK, gin.H{
+	//		"message": "读取claims错误",
+	//	})
+	//	return
+	//}
+	//println(claims.UserId)
+	type ProfileReq struct {
+		Email string `json:"email"`
 	}
-	claims, ok := c.(*UserClaims)
-	if !ok {
+	sess := sessions.Default(ctx)
+	id := sess.Get("userId").(int64)
+	c, err := u.svc.Profile(ctx, id)
+	if err != nil {
 		ctx.JSON(http.StatusOK, gin.H{
-			"message": "读取claims错误",
+			"message": "系统错误",
 		})
-		return
 	}
-	println(claims.UserId)
+	ctx.JSON(http.StatusOK, ProfileReq{
+		Email: c.Email,
+	})
 }
 
 func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
