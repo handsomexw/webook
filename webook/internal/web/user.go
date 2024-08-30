@@ -71,11 +71,16 @@ func (u *UserHandler) SignUp(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(200, gin.H{
-		"message": "注册成功",
-		//"user":     req.Email,
-		//"confirm":  req.ConfirmPassword,
-		//"password": req.Password,
+		"message":  "注册成功",
+		"user":     req.Email,
+		"confirm":  req.ConfirmPassword,
+		"password": req.Password,
 	})
+	//ctx.String(200, "注册成功")
+	//ctx.JSON(200, Result{
+	//	Code: 0,
+	//	Msg:  "注册成功",
+	//})
 	//fmt.Println(req)
 }
 
@@ -303,11 +308,20 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 	}
 	const biz = "login"
 	var req Request
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusOK, gin.H{
-			"message": "验证码校验系统错误",
+	if err := ctx.Bind(&req); err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 2,
+			Msg:  "验证系统错误",
+			Data: nil,
 		})
 		return
+	}
+	if req.Phone == "" {
+		ctx.JSON(http.StatusOK, Result{
+			Code: 3,
+			Msg:  "手机号输入错误",
+			Data: nil,
+		})
 	}
 	err := u.codeService.Send(ctx, biz, req.Phone)
 	if err != nil {
@@ -318,8 +332,10 @@ func (u *UserHandler) SendLoginSMSCode(ctx *gin.Context) {
 		})
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "发送成功",
+	ctx.JSON(http.StatusOK, Result{
+		Code: 0,
+		Msg:  "发送成功",
+		Data: nil,
 	})
 
 }

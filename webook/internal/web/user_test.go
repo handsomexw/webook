@@ -6,6 +6,7 @@ import (
 	svcmocks "basic-go/webook/internal/service/mocks"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -17,6 +18,7 @@ import (
 )
 
 func TestUserHandler_SignUp(t *testing.T) {
+
 	testCases := []struct {
 		name     string
 		mock     func(ctrl *gomock.Controller) service.UserService
@@ -37,7 +39,11 @@ func TestUserHandler_SignUp(t *testing.T) {
 				"password":"123456"
 			}`,
 			wantCode: http.StatusOK,
-			wantBody: `{"message":"注册成功"}`,
+			//wantBody: `{"message":"注册成功"}`,
+			//两种比较json
+			wantBody: `{"confirm":"123456","message":"注册成功","password":"123456","user":"123595@qq.com"}`,
+			//wantBody: "注册成功",
+			//wantBody: `{"code":0,"msg":"注册成功","data":null}`,
 		},
 		{name: "参数不对",
 			mock: func(ctrl *gomock.Controller) service.UserService {
@@ -95,8 +101,10 @@ func TestUserHandler_SignUp(t *testing.T) {
 			resp := httptest.NewRecorder()
 			server.ServeHTTP(resp, req)
 			//resp.Header()
+			jsonBody := toString(resp.Body.Bytes())
+			tc.wantBody = utoString(tc.wantBody)
 			assert.Equal(t, tc.wantCode, resp.Code)
-			assert.Equal(t, tc.wantBody, resp.Body.String())
+			assert.Equal(t, tc.wantBody, jsonBody)
 		})
 	}
 }
@@ -111,5 +119,24 @@ func TestMock(t *testing.T) {
 		Email: "123@qq.com",
 	})
 	t.Log("err:", err)
+}
 
+func toString(body []byte) string {
+	var data map[string]interface{}
+	err := json.Unmarshal(body, &data)
+	if err != nil {
+		return string(body)
+	}
+	jsonBody, _ := json.Marshal(data)
+	return string(jsonBody)
+}
+
+func utoString(body string) string {
+	var data map[string]interface{}
+	err := json.Unmarshal([]byte(body), &data)
+	if err != nil {
+		return body
+	}
+	jsonBody, _ := json.Marshal(data)
+	return string(jsonBody)
 }

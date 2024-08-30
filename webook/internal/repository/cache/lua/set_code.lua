@@ -5,7 +5,7 @@ local key = KEYS[1]
 local cntKey = key..":cnt"
 
 local val = ARGV[1]
-
+--键存在但没有设置过期时间，返回-1，键不存在，返回-2
 local ttl = tonumber(redis.call("ttl", key))
 if ttl == -1 then
     return -2
