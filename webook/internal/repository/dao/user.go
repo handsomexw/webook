@@ -19,6 +19,7 @@ type UserDao interface {
 	FindByPhone(ctx context.Context, phone string) (User, error)
 	FindById(ctx context.Context, id int64) (User, error)
 	Insert(ctx context.Context, user User) error
+	FindByOpenId(ctx context.Context, openId string) (User, error)
 }
 
 type GORMUserDao struct {
@@ -28,11 +29,13 @@ type GORMUserDao struct {
 type User struct {
 	Id int64 `gorm:"primaryKey;autoIncrement"`
 	//唯一索引运行有多个空值
-	Email    sql.NullString `gorm:"unique"`
-	Password string
-	Phone    sql.NullString `gorm:"unique"`
-	Ctime    int64
-	Utime    int64
+	Email         sql.NullString `gorm:"unique"`
+	Password      string
+	Phone         sql.NullString `gorm:"unique"`
+	WechatUnionID sql.NullString
+	WechatOpenID  sql.NullString `gorm:"unique"`
+	Ctime         int64
+	Utime         int64
 }
 
 type UserInfo struct {
@@ -78,4 +81,11 @@ func (ud *GORMUserDao) Insert(ctx context.Context, user User) error {
 		}
 	}
 	return err
+}
+
+func (ud *GORMUserDao) FindByOpenId(ctx context.Context, openId string) (User, error) {
+	var user User
+	//gorm默认列名规则
+	err := ud.db.WithContext(ctx).Where("wechat_open_id = ?", openId).First(&user).Error
+	return user, err
 }

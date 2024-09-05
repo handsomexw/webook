@@ -19,6 +19,7 @@ type UserService interface {
 	Profile(ctx context.Context, id int64) (domain.User, error)
 	FindOrCreate(ctx context.Context, phone string) (domain.User, error)
 	UpdateNoeSensitiveInfo(ctx context.Context, user domain.User) error
+	FindOrCreateWithWechat(ctx context.Context, info domain.WechatInfo) (domain.User, error)
 }
 
 type OneUserService struct {
@@ -83,4 +84,19 @@ func (svc *OneUserService) UpdateNoeSensitiveInfo(ctx context.Context, user doma
 	//需要更新，而不是修改
 	//return svc.repo.Create(ctx, user)
 	return nil
+}
+func (svc *OneUserService) FindOrCreateWithWechat(ctx context.Context, info domain.WechatInfo) (domain.User, error) {
+	u, err := svc.repo.FindByWechat(ctx, info.OpenID)
+	if err != repository.ErrorUserNotFound {
+		return u, err
+	}
+
+	err = svc.repo.Create(ctx, domain.User{
+		WechatInfo: info,
+	})
+	if err != nil && err != ErrorUserDuplicate {
+		return u, err
+	}
+	return svc.repo.FindByWechat(ctx, info.OpenID)
+
 }

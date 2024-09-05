@@ -2,7 +2,9 @@ package ioc
 
 import (
 	"basic-go/webook/config"
+	"basic-go/webook/pkg/ratelimit"
 	"github.com/redis/go-redis/v9"
+	"time"
 )
 
 func InitRedis() redis.Cmdable {
@@ -12,4 +14,8 @@ func InitRedis() redis.Cmdable {
 		DB:       0,
 	})
 	return redisClient
+}
+
+func InitLimiter(cmd redis.Cmdable) ratelimit.Limiter {
+	return ratelimit.NewRedisSlidingWindowLimiter(cmd, time.Second, 10)
 }

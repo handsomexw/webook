@@ -2,7 +2,6 @@ package tencent
 
 import (
 	mysms "basic-go/webook/internal/service/sms"
-	"basic-go/webook/pkg/ratelimit"
 	"context"
 	"fmt"
 	"github.com/ecodeclub/ekit"
@@ -14,16 +13,15 @@ type Service struct {
 	appId    *string
 	signName *string
 	client   *sms.Client
-	limiter  ratelimit.Limiter
 	mysms.Name
 }
 
-func NewService(appId string, signName string, client *sms.Client, limiter ratelimit.Limiter) *Service {
+func NewService(appId string, signName string, client *sms.Client) *Service {
 	return &Service{
 		appId:    ekit.ToPtr[string](appId),
 		signName: ekit.ToPtr[string](signName),
 		client:   client,
-		limiter:  limiter,
+
 		//os.Getenv(),
 	}
 }
