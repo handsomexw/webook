@@ -3,13 +3,13 @@ package web
 import (
 	"basic-go/webook/internal/domain"
 	"basic-go/webook/internal/service"
+	ijwt "basic-go/webook/internal/web/jwt"
 	"errors"
 	"fmt"
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/redis/go-redis/v9"
 	"net/http"
 	"time"
 )
@@ -20,20 +20,20 @@ type UserHandler struct {
 	svc         service.UserService
 	emailRegexp *regexp.Regexp
 	codeService service.CodeService
-	cmd         redis.Cmdable
-	JwtHadler
+	//cmd         redis.Cmdable
+	ijwt.Handler
 }
 
 const (
 	emailRegexPattern = `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
 )
 
-func NewUserHandler(svc service.UserService, codeService service.CodeService) *UserHandler {
+func NewUserHandler(svc service.UserService, codeService service.CodeService, jwtHdl ijwt.Handler) *UserHandler {
 	return &UserHandler{
 		emailRegexp: regexp.MustCompile(emailRegexPattern, regexp.RegexOptions(regexp.Unicode)),
 		svc:         svc,
 		codeService: codeService,
-		JwtHadler:   NewJwtHadler(),
+		Handler:     jwtHdl,
 	}
 }
 
@@ -163,7 +163,7 @@ func (u *UserHandler) Edit(ctx *gin.Context) {
 			Data: nil,
 		})
 	}
-	uc := ctx.MustGet("claims").(UserClaims)
+	uc := ctx.MustGet("claims").(ijwt.UserClaims)
 	err = u.svc.UpdateNoeSensitiveInfo(ctx, domain.User{
 		Id:       uc.UserId,
 		Name:     req.NewName,
@@ -196,12 +196,7 @@ func (u *UserHandler) Logout(ctx *gin.Context) {
 }
 func (u *UserHandler) LogoutJwt(ctx *gin.Context) {
 	//claims 在login_jwt 中间件中设定的
-	c, _ := ctx.Get("claims")
-	claims, ok := c.(*UserClaims)
-	if !ok {
-		ctx.String(http.StatusOK, "系统错误")
-	}
-	err := u.cmd.Set(ctx, fmt.Sprintf("user:ssid:%s", claims.Ssid), "", time.Hour*24*7).Err()
+	err := u.ClearToken(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Msg: "退出登录失败",
@@ -214,17 +209,22 @@ func (u *UserHandler) LogoutJwt(ctx *gin.Context) {
 }
 
 func (u *UserHandler) RefreshToken(ctx *gin.Context) {
-	refreshToken := ExtractToken(ctx)
-	var rc RefreshClaims
+	refreshToken := u.ExtractToken(ctx)
+	var rc ijwt.RefreshClaims
 	token, err := jwt.ParseWithClaims(refreshToken, &rc, func(t *jwt.Token) (interface{}, error) {
-		return u.rtKey, nil
+		return ijwt.RtKey, nil
 	})
 	if err != nil || !token.Valid {
 		//返回401
 		ctx.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-	err = u.setLoginToken(ctx, rc.UserId)
+	err = u.CheckSession(ctx, rc.Ssid)
+	if err != nil {
+		//系统错误，或者用户已经退出了
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+	}
+	err = u.SetLoginToken(ctx, rc.UserId)
 	if err != nil {
 		ctx.AbortWithStatus(http.StatusUnauthorized)
 		return
@@ -272,7 +272,7 @@ func (u *UserHandler) LoginJwt(ctx *gin.Context) {
 	//	"userId": user.Id,
 	//})
 
-	err = u.setLoginToken(ctx, user.Id)
+	err = u.SetLoginToken(ctx, user.Id)
 	if err != nil {
 		ctx.JSON(http.StatusOK, gin.H{
 			"message": "登录失败",
@@ -398,7 +398,7 @@ func (u *UserHandler) VerifyLoginSMSCode(ctx *gin.Context) {
 		})
 	}
 
-	err = u.setLoginToken(ctx, user.Id)
+	err = u.SetLoginToken(ctx, user.Id)
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 2,

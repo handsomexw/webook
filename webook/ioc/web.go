@@ -2,6 +2,7 @@ package ioc
 
 import (
 	"basic-go/webook/internal/web"
+	ijwt "basic-go/webook/internal/web/jwt"
 	"basic-go/webook/internal/web/middleware"
 	"basic-go/webook/pkg/ginx/middlewares/ratelimit"
 	ratelimit2 "basic-go/webook/pkg/ratelimit"
@@ -21,11 +22,11 @@ func InitWebServer(mdls []gin.HandlerFunc, hdl *web.UserHandler,
 	return server
 }
 
-func InitMiddlewares(limiter ratelimit2.Limiter) []gin.HandlerFunc {
+func InitMiddlewares(limiter ratelimit2.Limiter, jwtHdl ijwt.Handler) []gin.HandlerFunc {
 
 	return []gin.HandlerFunc{
 		corsHdl(),
-		ignoreHdl(),
+		ignoreHdl(jwtHdl),
 		func(context *gin.Context) {
 			fmt.Println("这是第一个路由")
 		},
@@ -55,8 +56,8 @@ func corsHdl() gin.HandlerFunc {
 	})
 }
 
-func ignoreHdl() gin.HandlerFunc {
-	return middleware.NewLoginJwtMiddlewareBuilder().IgnorePath("/user/login").
+func ignoreHdl(jwtHdl ijwt.Handler) gin.HandlerFunc {
+	return middleware.NewLoginJwtMiddlewareBuilder(jwtHdl).IgnorePath("/user/login").
 		IgnorePath("/user/signup").IgnorePath("/user/login/jwt").
 		IgnorePath("/user/login_sms/code/send").
 		IgnorePath("/user/login_sms/code/verify").

@@ -1,21 +1,22 @@
 package middleware
 
 import (
-	"basic-go/webook/internal/web"
-	"fmt"
+	ijwt "basic-go/webook/internal/web/jwt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/redis/go-redis/v9"
 	"net/http"
 )
 
 type LoginJtMiddlewareBuilder struct {
 	path []string
-	cmd  redis.Cmdable
+	//cmd  redis.Cmdable
+	ijwt.Handler
 }
 
-func NewLoginJwtMiddlewareBuilder() *LoginJtMiddlewareBuilder {
-	return &LoginJtMiddlewareBuilder{}
+func NewLoginJwtMiddlewareBuilder(jwtHdl ijwt.Handler) *LoginJtMiddlewareBuilder {
+	return &LoginJtMiddlewareBuilder{
+		Handler: jwtHdl,
+	}
 }
 
 func (l *LoginJtMiddlewareBuilder) IgnorePath(path ...string) *LoginJtMiddlewareBuilder {
@@ -33,8 +34,8 @@ func (l *LoginJtMiddlewareBuilder) Build() gin.HandlerFunc {
 			}
 		}
 		//
-		tokenHeader := web.ExtractToken(ctx)
-		myclaims := &web.UserClaims{}
+		tokenHeader := l.ExtractToken(ctx)
+		myclaims := &ijwt.UserClaims{}
 		token, err := jwt.ParseWithClaims(tokenHeader, myclaims, func(token *jwt.Token) (interface{}, error) {
 			return []byte("oN1)tV1{xA6#xM2/nR5/hU1#fH2$bU0$"), nil
 		})
@@ -60,8 +61,9 @@ func (l *LoginJtMiddlewareBuilder) Build() gin.HandlerFunc {
 		//	ctx.Header("Token", newToken)
 		//}
 		//还有降级策略，如果redis崩了，那就直接登录，不判断
-		cnt, err := l.cmd.Exists(ctx, fmt.Sprintf("userd:ssid:%d", myclaims.UserId)).Result()
-		if err != nil || cnt > 0 {
+		//cnt, err := l.cmd.Exists(ctx, fmt.Sprintf("userd:ssid:%d", myclaims.UserId)).Result()
+		err = l.CheckSession(ctx, myclaims.Ssid)
+		if err != nil {
 			//系统错误，或者用户已经退出了
 			ctx.AbortWithStatus(http.StatusUnauthorized)
 		}

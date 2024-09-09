@@ -4,6 +4,7 @@ import (
 	"basic-go/webook/internal/domain"
 	"basic-go/webook/internal/service"
 	"basic-go/webook/internal/service/oauth2/wechat"
+	ijwt "basic-go/webook/internal/web/jwt"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -15,7 +16,7 @@ import (
 type OAuth2WechatHandler struct {
 	svc  wechat.Service
 	usvc service.UserService
-	JwtHadler
+	ijwt.Handler
 	stateKey []byte
 	cfg      Config
 }
@@ -30,7 +31,7 @@ type Config struct {
 	Secure bool
 }
 
-func NewOAuth2WechatHandler(svc wechat.Service, usvc service.UserService) *OAuth2WechatHandler {
+func NewOAuth2WechatHandler(svc wechat.Service, usvc service.UserService, jwtHdl ijwt.Handler) *OAuth2WechatHandler {
 	return &OAuth2WechatHandler{
 		svc:      svc,
 		usvc:     usvc,
@@ -38,7 +39,7 @@ func NewOAuth2WechatHandler(svc wechat.Service, usvc service.UserService) *OAuth
 		cfg: Config{
 			Secure: true,
 		},
-		JwtHadler: NewJwtHadler(),
+		Handler: jwtHdl,
 	}
 }
 
@@ -129,7 +130,7 @@ func (h *OAuth2WechatHandler) Callback(ctx *gin.Context) {
 	}
 	//设置token
 
-	err = h.setLoginToken(ctx, u.Id)
+	err = h.SetLoginToken(ctx, u.Id)
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,
