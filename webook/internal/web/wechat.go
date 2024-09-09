@@ -15,7 +15,7 @@ import (
 type OAuth2WechatHandler struct {
 	svc  wechat.Service
 	usvc service.UserService
-	jwtHadler
+	JwtHadler
 	stateKey []byte
 	cfg      Config
 }
@@ -38,6 +38,7 @@ func NewOAuth2WechatHandler(svc wechat.Service, usvc service.UserService) *OAuth
 		cfg: Config{
 			Secure: true,
 		},
+		JwtHadler: NewJwtHadler(),
 	}
 }
 
@@ -127,7 +128,8 @@ func (h *OAuth2WechatHandler) Callback(ctx *gin.Context) {
 		return
 	}
 	//设置token
-	err = h.setJwtToken(ctx, u.Id)
+
+	err = h.setLoginToken(ctx, u.Id)
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 5,

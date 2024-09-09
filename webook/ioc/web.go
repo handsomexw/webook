@@ -38,7 +38,7 @@ func corsHdl() gin.HandlerFunc {
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
-		ExposeHeaders:    []string{"Token"},
+		ExposeHeaders:    []string{"Token", "x-refresh-token"},
 		//第一种方式
 		//AllowOrigins: []string{"http://localhost:8081"},
 		//第二种方式

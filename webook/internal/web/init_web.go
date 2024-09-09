@@ -15,4 +15,6 @@ func RegisterRoutes(server *gin.Engine, u *UserHandler) {
 	ug.POST("/login/profile", u.Profile)
 	ug.POST("/login_sms/code/send", u.SendLoginSMSCode)
 	ug.POST("/login_sms/code/verify", u.VerifyLoginSMSCode)
+	ug.POST("/logout", u.Logout)
+	ug.POST("/login/refresh", u.RefreshToken)
 }

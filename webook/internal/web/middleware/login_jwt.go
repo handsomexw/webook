@@ -2,15 +2,16 @@ package middleware
 
 import (
 	"basic-go/webook/internal/web"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"net/http"
-	"strings"
-	"time"
 )
 
 type LoginJtMiddlewareBuilder struct {
 	path []string
+	cmd  redis.Cmdable
 }
 
 func NewLoginJwtMiddlewareBuilder() *LoginJtMiddlewareBuilder {
@@ -31,14 +32,8 @@ func (l *LoginJtMiddlewareBuilder) Build() gin.HandlerFunc {
 				return
 			}
 		}
-
-		tokenHeader := ctx.GetHeader("Token")
-		sesg := strings.Split(tokenHeader, " ")
-		if len(sesg) != 1 {
-			ctx.AbortWithStatus(http.StatusUnauthorized)
-			return
-		}
-		tokenHeader = sesg[0]
+		//
+		tokenHeader := web.ExtractToken(ctx)
 		myclaims := &web.UserClaims{}
 		token, err := jwt.ParseWithClaims(tokenHeader, myclaims, func(token *jwt.Token) (interface{}, error) {
 			return []byte("oN1)tV1{xA6#xM2/nR5/hU1#fH2$bU0$"), nil
@@ -57,14 +52,19 @@ func (l *LoginJtMiddlewareBuilder) Build() gin.HandlerFunc {
 			return
 		}
 
-		now := time.Now()
-		if myclaims.ExpiresAt.Sub(now) < time.Second*50 {
-			myclaims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(time.Minute))
-			//t := jwt.NewWithClaims(jwt.SigningMethodHS256, myclaims)
-			newToken, _ := token.SignedString([]byte("oN1)tV1{xA6#xM2/nR5/hU1#fH2$bU0$"))
-			ctx.Header("Token", newToken)
+		//now := time.Now()
+		//if myclaims.ExpiresAt.Sub(now) < time.Second*50 {
+		//	myclaims.ExpiresAt = jwt.NewNumericDate(time.Now().Add(time.Minute))
+		//	//t := jwt.NewWithClaims(jwt.SigningMethodHS256, myclaims)
+		//	newToken, _ := token.SignedString([]byte("oN1)tV1{xA6#xM2/nR5/hU1#fH2$bU0$"))
+		//	ctx.Header("Token", newToken)
+		//}
+		//还有降级策略，如果redis崩了，那就直接登录，不判断
+		cnt, err := l.cmd.Exists(ctx, fmt.Sprintf("userd:ssid:%d", myclaims.UserId)).Result()
+		if err != nil || cnt > 0 {
+			//系统错误，或者用户已经退出了
+			ctx.AbortWithStatus(http.StatusUnauthorized)
 		}
-
 		ctx.Set("claims", myclaims)
 	}
 }

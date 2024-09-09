@@ -8,6 +8,8 @@ import (
 	regexp "github.com/dlclark/regexp2"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/redis/go-redis/v9"
 	"net/http"
 	"time"
 )
@@ -18,7 +20,8 @@ type UserHandler struct {
 	svc         service.UserService
 	emailRegexp *regexp.Regexp
 	codeService service.CodeService
-	jwtHadler
+	cmd         redis.Cmdable
+	JwtHadler
 }
 
 const (
@@ -30,6 +33,7 @@ func NewUserHandler(svc service.UserService, codeService service.CodeService) *U
 		emailRegexp: regexp.MustCompile(emailRegexPattern, regexp.RegexOptions(regexp.Unicode)),
 		svc:         svc,
 		codeService: codeService,
+		JwtHadler:   NewJwtHadler(),
 	}
 }
 
@@ -190,6 +194,45 @@ func (u *UserHandler) Logout(ctx *gin.Context) {
 		"message": "退出登录成功",
 	})
 }
+func (u *UserHandler) LogoutJwt(ctx *gin.Context) {
+	//claims 在login_jwt 中间件中设定的
+	c, _ := ctx.Get("claims")
+	claims, ok := c.(*UserClaims)
+	if !ok {
+		ctx.String(http.StatusOK, "系统错误")
+	}
+	err := u.cmd.Set(ctx, fmt.Sprintf("user:ssid:%s", claims.Ssid), "", time.Hour*24*7).Err()
+	if err != nil {
+		ctx.JSON(http.StatusOK, Result{
+			Msg: "退出登录失败",
+		})
+		return
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Msg: "退出登录成功",
+	})
+}
+
+func (u *UserHandler) RefreshToken(ctx *gin.Context) {
+	refreshToken := ExtractToken(ctx)
+	var rc RefreshClaims
+	token, err := jwt.ParseWithClaims(refreshToken, &rc, func(t *jwt.Token) (interface{}, error) {
+		return u.rtKey, nil
+	})
+	if err != nil || !token.Valid {
+		//返回401
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	err = u.setLoginToken(ctx, rc.UserId)
+	if err != nil {
+		ctx.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	ctx.JSON(http.StatusOK, Result{
+		Msg: "刷新成功",
+	})
+}
 
 func (u *UserHandler) LoginJwt(ctx *gin.Context) {
 	type LoginReq struct {
@@ -228,13 +271,15 @@ func (u *UserHandler) LoginJwt(ctx *gin.Context) {
 	//token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 	//	"userId": user.Id,
 	//})
-	err = u.setJwtToken(ctx, user.Id)
+
+	err = u.setLoginToken(ctx, user.Id)
 	if err != nil {
 		ctx.JSON(http.StatusOK, gin.H{
 			"message": "登录失败",
 		})
 		return
 	}
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "登录成功",
 	})
@@ -352,7 +397,8 @@ func (u *UserHandler) VerifyLoginSMSCode(ctx *gin.Context) {
 			Data: err.Error(),
 		})
 	}
-	err = u.setJwtToken(ctx, user.Id)
+
+	err = u.setLoginToken(ctx, user.Id)
 	if err != nil {
 		ctx.JSON(http.StatusOK, Result{
 			Code: 2,
